@@ -1,47 +1,70 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 
 // Mock blockchain state
-let tokenBalances: { [key: string]: number } = {}
-let contractOwner = 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM'
+let debrisRegistry: { [key: number]: any } = {}
+let lastDebrisId = 0
 
 // Mock contract functions
-const mint = (sender: string, amount: number, recipient: string) => {
-  if (sender !== contractOwner) {
-    return { success: false, error: 100 }
+const reportDebris = (sender: string, identifier: string, size: number, orbit: string, riskLevel: number) => {
+  lastDebrisId++
+  debrisRegistry[lastDebrisId] = {
+    identifier,
+    size,
+    orbit,
+    risk_level: riskLevel,
+    reporter: sender,
+    verified: false
   }
-  tokenBalances[recipient] = (tokenBalances[recipient] || 0) + amount
+  return { success: true, value: lastDebrisId }
+}
+
+const verifyDebris = (sender: string, debrisId: number) => {
+  if (sender !== 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM') {
+    return { success: false, error: 401 }
+  }
+  if (!debrisRegistry[debrisId]) {
+    return { success: false, error: 404 }
+  }
+  debrisRegistry[debrisId].verified = true
   return { success: true }
 }
 
-const getBalance = (account: string) => {
-  return tokenBalances[account] || 0
+const getDebrisInfo = (debrisId: number) => {
+  return debrisRegistry[debrisId] || null
 }
 
-describe('SpaceDebrisToken', () => {
+describe('DebrisTracker', () => {
   beforeEach(() => {
-    tokenBalances = {}
+    debrisRegistry = {}
+    lastDebrisId = 0
   })
   
-  it('ensures token can be minted by owner', () => {
+  it('ensures debris can be reported and verified', () => {
+    const deployer = 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM'
     const wallet1 = 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG'
     
-    const mintResult = mint(contractOwner, 100, wallet1)
-    expect(mintResult.success).toBe(true)
+    const reportResult = reportDebris(
+        wallet1,
+        'Debris-001',
+        10,
+        'LEO',
+        3
+    )
+    expect(reportResult.success).toBe(true)
+    expect(reportResult.value).toBe(1)
     
-    const balance = getBalance(wallet1)
-    expect(balance).toBe(100)
-  })
-  
-  it('ensures token cannot be minted by non-owner', () => {
-    const wallet1 = 'ST2CY5V39NHDPWSXMW9QDT3HC3GD6Q6XX4CFRK9AG'
-    const wallet2 = 'ST2JHG361ZXG51QTKY2NQCVBPPRRE2KZB1HR05NNC'
+    const verifyResult = verifyDebris(deployer, 1)
+    expect(verifyResult.success).toBe(true)
     
-    const mintResult = mint(wallet1, 100, wallet2)
-    expect(mintResult.success).toBe(false)
-    expect(mintResult.error).toBe(100)
-    
-    const balance = getBalance(wallet2)
-    expect(balance).toBe(0)
+    const debrisInfo = getDebrisInfo(1)
+    expect(debrisInfo).toEqual({
+      identifier: 'Debris-001',
+      size: 10,
+      orbit: 'LEO',
+      risk_level: 3,
+      reporter: wallet1,
+      verified: true
+    })
   })
 })
 
